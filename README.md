@@ -1,5 +1,3 @@
-# Forex_ESP32_TFT
-
 # Forex ESP32 TFT Expert data exchange.
 
 Connect to Metatrader 4 Expert by socket, send request and receive for the data to be displayed on the screen TFT every x seconds. 
