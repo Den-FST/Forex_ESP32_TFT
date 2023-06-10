@@ -1,6 +1,6 @@
 # Forex_ESP32_TFT
 
-Connect to Metatrader 4 Expert by socket, send request and receive for the data to be displayed on the screen TFT. 
+Connect to Metatrader 4 Expert by socket, send request and receive for the data to be displayed on the screen TFT every x seconds. 
 
 In my case is 2 config, TFT
 
