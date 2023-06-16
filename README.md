@@ -13,7 +13,7 @@ https://img.shields.io/github/last-commit/fstadmin/Forex_ESP32_TFT?style=plastic
 
 Next implementation tasks:
 
-- [ ] AP WiFi Portal.
+- [x] AP WiFi Portal.
 - [ ] WebServer View Forex data.
 - [ ] Time Sync and scenaries.
 - [ ] Send data to Home Assistant.
