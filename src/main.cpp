@@ -20,7 +20,7 @@
 
 TFT_eSPI tft = TFT_eSPI(); // Initialize TFT display object
 
-// #define DEBUG
+#define DEBUG
 
 int y = 0;
 bool sent = false;
@@ -49,8 +49,8 @@ char fx_port2[6] = "5001";
 char fx_server_con[40];
 char fx_port_con[6];
 
-#define TRIGGER_PIN 0
-#define CHANGE_SRV_PIN 22
+#define TRIGGER_PIN 22
+#define CHANGE_SRV_PIN 0
 
 int srv = 0;
 
@@ -112,6 +112,7 @@ void sendData()
       tft.setTextSize(1);
       tft.setTextColor(TFT_WHITE);
 
+
       while (startIndex < response.length())
       {
         endIndex = response.indexOf(delimiter, startIndex); // Find the next delimiter
@@ -165,19 +166,23 @@ void sendData()
         { // PARSE AND SHOW ON TFT VALUE OF OPEN OPERATIONS TEXT
 
           int col = substring.toInt();
-          if (col <= 0)
+          if (col < 0)
           {
             tft.setTextColor(TFT_RED);
+            tft.setCursor(TFT_WIDTH / 1.1, y);
+            tft.print(substring);
+            delay(5);
           }
           else
           {
             tft.setTextColor(TFT_GREEN);
+            tft.setCursor(TFT_WIDTH / 1.044, y);
+            tft.print(substring);
+            delay(5);
           }
-          tft.setCursor(TFT_WIDTH / 1.1, y);
-          tft.print(substring);
-          delay(5);
+
         }
-        else if (startIndex == 24)
+        else if (startIndex == 23)
         {
 // PARSE PROFIT VALUE TEXT
 #ifdef DEBUG
@@ -216,8 +221,18 @@ void sendData()
       delay(5);
       tft.print(profit);
       endmsg = false;
+
+      tft.fillRect(0, y + 25, TFT_HEIGHT, TFT_WIDTH - (TFT_WIDTH - y), TFT_BLACK);
+      
+      #ifdef DEBUG
+      Serial.print("TFT REST:");
+      Serial.println(y);
+      Serial.println(TFT_WIDTH - y);
+      #endif
     }
     client.stop(); // Close connection
+
+    
     y = -8;
   }
 }
@@ -285,6 +300,7 @@ void setup()
         {
           Serial.println("failed to load json config");
           tft.println("failed to load json config");
+          SPIFFS.format();
         }
       }
     }
@@ -418,7 +434,7 @@ void loop()
 {
   ArduinoOTA.handle();
 
-  if (digitalRead(CHANGE_SRV_PIN) == LOW && srv == 0)
+  if (digitalRead(CHANGE_SRV_PIN) == LOW && srv == 0) //Change to server 2
   { 
   tft.fillScreen(TFT_YELLOW);
   strcpy(fx_server_con , fx_server2);
@@ -428,9 +444,15 @@ void loop()
   Serial.println(fx_port_con);
   srv = 1;
   delay(2000);
+  tft.fillScreen(TFT_BLACK);
+  tft.setFreeFont(FF18);
+  tft.setTextSize(1);
+  tft.setTextColor(TFT_WHITE);
+  tft.setCursor(0,50);
+  tft.println("Waiting for data...");
   } 
 
-  if (digitalRead(CHANGE_SRV_PIN) == LOW && srv == 1)
+  if (digitalRead(CHANGE_SRV_PIN) == LOW && srv == 1) //Change to server 2
   {
   tft.fillScreen(TFT_GREEN);
   strcpy(fx_server_con , fx_server);
@@ -439,19 +461,23 @@ void loop()
   Serial.println(fx_server_con);
   Serial.println(fx_port_con);
   delay(2000);
+  tft.fillScreen(TFT_BLACK);
+  tft.setFreeFont(FF18);
+  tft.setTextSize(1);
+  tft.setTextColor(TFT_WHITE);
+  tft.setCursor(0,50);
+  tft.println("Waiting for data...");
   srv = 0;
   }
 
   if (digitalRead(TRIGGER_PIN) == LOW)
   {
     tft.fillScreen(TFT_RED);
-    SPIFFS.format();
-    // WiFiManager
-    // Local intialization. Once its business is done, there is no need to keep it around
-    AsyncWiFiManager wifiManager(&server, &dns);
-
-    // reset settings - for testing
-    wifiManager.resetSettings();
+    
+    SPIFFS.format(); //Format SPIFFS and all data
+       
+    AsyncWiFiManager wifiManager(&server, &dns); // Local intialization. Once its business is done, there is no need to keep it around
+    wifiManager.resetSettings(); // reset settings - for testing
 
     Serial.println("reset");
     delay(1000);
