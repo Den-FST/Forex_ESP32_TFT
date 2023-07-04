@@ -143,12 +143,14 @@ void OnTimer()
                   double lots = OrderLots();
                   double openPrice = OrderOpenPrice();
                   float profit = OrderProfit();
+                  double currentProfit = AccountProfit();
+                  Print("Current profit: ", currentProfit);
                  // int orderProfitInteger = (int)MathRound(profit);
                   double accbalance = AccountBalance();
                   double totalProfit = CalculateTotalOpenOrdersProfit();
                   // Format the position information as a string
                   //string positionData = ticket + "," + symbol + "," + type + "," + DoubleToString(lots) + "," + DoubleToString(openPrice) + "," + DoubleToString(profit);
-                  string positionData = symbol + "," + type + "," + DoubleToString(lots,2) + "," + DoubleToString(profit,1 ) + "," + DoubleToString(totalProfit, 1);
+                  string positionData = symbol + "," + type + "," + DoubleToString(lots,2) + "," + DoubleToString(profit,1 ) + "," + DoubleToString(currentProfit, 1) + ",";
                   pClient.Send(positionData  + StringLen(positionData) +  "#");
                   Print(positionData, StringLen(positionData));
                   Print("Account Balance: ", accbalance);
