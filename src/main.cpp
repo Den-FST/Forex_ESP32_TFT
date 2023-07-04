@@ -67,6 +67,20 @@ void saveConfigCallback()
 AsyncWebServer server(80);
 DNSServer dns;
 
+void printTFT (int x, int y, String text, const GFXfont* font, uint16_t color, int size, int format){
+tft.setFreeFont(font);
+tft.setTextColor(color);
+tft.setTextSize(size);
+tft.setCursor(x, y);
+if (format != 1) {
+tft.print(text);
+} else {
+tft.println(text);
+  }
+}
+
+
+
 void connectToServer()
 {
   int port = atoi(fx_port_con);
@@ -107,6 +121,8 @@ void sendData()
       char delimiter = ','; // Delimiter character
       int startIndex = 0;   // Starting index for substring extraction
       int endIndex;         // Ending index for substring extraction
+      int valIndex = 0;
+      int valIndex1 = 0;
 
       tft.setFreeFont(FF18);
       tft.setTextSize(1);
@@ -127,6 +143,8 @@ void sendData()
 
         String substring = response.substring(startIndex, endIndex);
 #ifdef DEBUG
+        Serial.print("Substring: ");
+        Serial.println(substring);
         Serial.print("StartIndex: ");
         Serial.println(startIndex);
 #endif
@@ -147,68 +165,64 @@ void sendData()
           {
             tft.setTextColor(TFT_BLUE);
             tft.print("SL");
+            valIndex = 12;
+            valIndex1 = 17;
           }
           else
           {
-            tft.setTextColor(TFT_YELLOW);
+            tft.setTextColor(TFT_PURPLE);
             tft.print("BY");
+            valIndex = 11;
+            valIndex1 = 16;
           }
           delay(5);
         } // PARSE AND SHOW ON TFT LOTE TEXT
-        else if (startIndex == 12)
+        else if (startIndex == valIndex) 
         {
-          tft.setTextColor(TFT_WHITE);
-          tft.setCursor(TFT_WIDTH / 1.5, y);
-          tft.print(substring);
+          printTFT(TFT_WIDTH / 1.5, y, substring,FF18, TFT_WHITE, 1, 0);
           delay(5);
         }
-        else if (startIndex == 17)
+        else if (startIndex == valIndex1) 
         { // PARSE AND SHOW ON TFT VALUE OF OPEN OPERATIONS TEXT
 
           int col = substring.toInt();
-          if (col < 0)
+          if (col <= 0.0)
           {
-            tft.setTextColor(TFT_RED);
-            tft.setCursor(TFT_WIDTH / 1.1, y);
-            tft.print(substring);
+            printTFT(TFT_WIDTH / 1.1, y, substring,FF18, TFT_RED, 1, 0);
             delay(5);
           }
           else
           {
-            tft.setTextColor(TFT_GREEN);
-            tft.setCursor(TFT_WIDTH / 1.044, y);
-            tft.print(substring);
+            printTFT(TFT_WIDTH / 1.044, y, substring,FF18, TFT_GREEN, 1, 0);
             delay(5);
           }
 
         }
         else if (startIndex == 23)
         {
-// PARSE PROFIT VALUE TEXT
-#ifdef DEBUG
-          Serial.print("Profit: ");
-#endif
+        // PARSE PROFIT VALUE TEXT
+        #ifdef DEBUG
+                  Serial.print("Profit: ");
+        #endif
 
-          profit = substring.substring(0, 6);
-#ifdef DEBUG
-          Serial.println(profit);
-#endif
+                  profit = substring.substring(0, 6);
+        #ifdef DEBUG
+                  Serial.println(profit);
+        #endif
         }
-#ifdef DEBUG
-        Serial.println(substring); // Print the extracted substring
-#endif
+        #ifdef DEBUG
+                Serial.println(substring); // Print the extracted substring
+        #endif
 
         startIndex = endIndex + 1; // Update the starting index for the next substring
       }
-
-#ifdef DEBUG
-      Serial.println("---------------------------------------");
-#endif
-    }
+        #ifdef DEBUG
+              Serial.println("---------------------------------------");
+        #endif
+     }
     if (endmsg == true)
     { // DRAW YELLOW LINE AND SHOW ON TFT PAIR TEXT
       tft.drawLine(0, y + 5, TFT_HEIGHT, y + 5, TFT_YELLOW);
-
       tft.setCursor(TFT_WIDTH / 2.5, y + 20);
       int col = profit.toInt();
       if (col < 0)
@@ -437,6 +451,14 @@ void loop()
   if (digitalRead(CHANGE_SRV_PIN) == LOW && srv == 0) //Change to server 2
   { 
   tft.fillScreen(TFT_YELLOW);
+  printTFT(50,50, "Server 1",FF18, TFT_BLACK, 2, 1); //print on TFT Screen
+  
+  // tft.setFreeFont(FF18);
+  // tft.setTextSize(2);
+  // tft.setTextColor(TFT_BLACK);
+  // tft.setCursor(50,50);
+  // tft.println("Server 1");
+
   strcpy(fx_server_con , fx_server2);
   strcpy(fx_port_con , fx_port2);
   Serial.println("Server Changed to Second! ");
@@ -455,6 +477,12 @@ void loop()
   if (digitalRead(CHANGE_SRV_PIN) == LOW && srv == 1) //Change to server 2
   {
   tft.fillScreen(TFT_GREEN);
+  printTFT(50,50, "Server 2",FF18, TFT_BLACK, 2, 1);
+  // tft.setFreeFont(FF18);
+  // tft.setTextSize(2);
+  // tft.setTextColor(TFT_BLACK);
+  // tft.setCursor(50,50);
+  // tft.println("Server 2");
   strcpy(fx_server_con , fx_server);
   strcpy(fx_port_con , fx_port);
   Serial.println("Server Changed to First! ");
@@ -462,11 +490,12 @@ void loop()
   Serial.println(fx_port_con);
   delay(2000);
   tft.fillScreen(TFT_BLACK);
-  tft.setFreeFont(FF18);
-  tft.setTextSize(1);
-  tft.setTextColor(TFT_WHITE);
-  tft.setCursor(0,50);
-  tft.println("Waiting for data...");
+  printTFT(0,50, "Waiting for data...",FF18, TFT_WHITE, 1, 1);
+  // tft.setFreeFont(FF18);
+  // tft.setTextSize(1);
+  // tft.setTextColor(TFT_WHITE);
+  // tft.setCursor(0,50);
+  // tft.println("Waiting for data...");
   srv = 0;
   }
 
@@ -503,6 +532,7 @@ void loop()
       if (connected_server == false)
       {
         // tft.setCursor(0, 60);
+        
         tft.print("Connecting Server..");
         // tft.setCursor(205, 60);
         tft.setTextColor(TFT_GREEN);
@@ -514,10 +544,4 @@ void loop()
     }
   }
 
-  // SerialWifi();
-
-  // if (Serial.available()) {
-  //   serialData = Serial.readStringUntil('\n');
-  //   Serial.println("Received data: " + serialData);
-  // }
 }
