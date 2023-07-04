@@ -452,13 +452,6 @@ void loop()
   { 
   tft.fillScreen(TFT_YELLOW);
   printTFT(50,50, "Server 1",FF18, TFT_BLACK, 2, 1); //print on TFT Screen
-  
-  // tft.setFreeFont(FF18);
-  // tft.setTextSize(2);
-  // tft.setTextColor(TFT_BLACK);
-  // tft.setCursor(50,50);
-  // tft.println("Server 1");
-
   strcpy(fx_server_con , fx_server2);
   strcpy(fx_port_con , fx_port2);
   Serial.println("Server Changed to Second! ");
@@ -478,11 +471,6 @@ void loop()
   {
   tft.fillScreen(TFT_GREEN);
   printTFT(50,50, "Server 2",FF18, TFT_BLACK, 2, 1);
-  // tft.setFreeFont(FF18);
-  // tft.setTextSize(2);
-  // tft.setTextColor(TFT_BLACK);
-  // tft.setCursor(50,50);
-  // tft.println("Server 2");
   strcpy(fx_server_con , fx_server);
   strcpy(fx_port_con , fx_port);
   Serial.println("Server Changed to First! ");
@@ -491,11 +479,6 @@ void loop()
   delay(2000);
   tft.fillScreen(TFT_BLACK);
   printTFT(0,50, "Waiting for data...",FF18, TFT_WHITE, 1, 1);
-  // tft.setFreeFont(FF18);
-  // tft.setTextSize(1);
-  // tft.setTextColor(TFT_WHITE);
-  // tft.setCursor(0,50);
-  // tft.println("Waiting for data...");
   srv = 0;
   }
 
