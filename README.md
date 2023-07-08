@@ -7,7 +7,7 @@ https://img.shields.io/github/last-commit/fstadmin/Forex_ESP32_TFT?style=plastic
 ## In my case is 2 config, TFT
 
 ``` C++
-#define DEBUG //to view serial messages
+Send serial=1 for view DEBUG
 
 ```
 
