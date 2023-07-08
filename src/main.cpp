@@ -3,7 +3,14 @@
 #include <FS.h> //this needs to be first, or it all crashes and burns...
 #include "SPIFFS.h"
 
+#if defined(ESP8266)
+#include <ESP8266WiFi.h>
+#include <ESPAsyncTCP.h>
+#elif defined(ESP32)
 #include <WiFi.h>
+#include <AsyncTCP.h>
+#endif
+
 #include <WiFiClient.h>
 
 #include <TFT_eSPI.h>
@@ -12,6 +19,9 @@
 // needed for library
 #include <ESPAsyncWebServer.h>
 #include <ESPAsyncWiFiManager.h> //https://github.com/tzapu/WiFiManager
+#include <WebSerial.h>
+
+#include "functions.h"
 
 #include <ArduinoJson.h> //https://github.com/bblanchon/ArduinoJson
 
@@ -20,8 +30,13 @@
 
 TFT_eSPI tft = TFT_eSPI(); // Initialize TFT display object
 
-#define DEBUG
+// #define DEBUG_SERIAL
+int DEBUG_SERIAL = 0;
 
+// Variables to store the current firmware file size
+
+
+int DWflag = 9;
 int y = 0;
 bool sent = false;
 bool connected_server = false;
@@ -38,7 +53,6 @@ WiFiClient client;
 
 String myString = "";
 String profit;
-
 
 char fx_server[40];
 char fx_port[6] = "5000";
@@ -67,19 +81,93 @@ void saveConfigCallback()
 AsyncWebServer server(80);
 DNSServer dns;
 
-void printTFT (int x, int y, String text, const GFXfont* font, uint16_t color, int size, int format){
-tft.setFreeFont(font);
-tft.setTextColor(color);
-tft.setTextSize(size);
-tft.setCursor(x, y);
-if (format != 1) {
-tft.print(text);
-} else {
-tft.println(text);
+
+
+/* Message callback of WebSerial */
+void recvMsg(uint8_t *data, size_t len)
+{
+  WebSerial.println("Received Data...");
+  String d = "";
+  for (int i = 0; i < len; i++)
+  {
+    d += char(data[i]);
+  }
+  WebSerial.println(d);
+  if (d == "serial=1")
+  {
+    DEBUG_SERIAL = 1;
+    WebSerial.println("DEBUG_SERIAL = 1");
+  }
+  else if (d == "serial=0")
+  {
+    DEBUG_SERIAL = 0;
+    WebSerial.println("DEBUG_SERIAL = 0");
+  }
+  else if (d == "gettime")
+  {
+    time_sync();
+    WebSerial.println(timeClient.getFormattedTime());
+  }
+  else if (d == "settime")
+  {
+    set_time();
+  }
+  else if (d == "systime")
+  {
+    printDateTime();
+  }
+  else if (d == "time")
+  {
+    String t = timeClient.getFormattedTime();
+    WebSerial.println(t);
+  }
+  else if (d == "monon")
+  {
+    // Turn on the display
+    digitalWrite(TFT_BL, HIGH);
+    // tft.writecommand(0x11);  // Send the appropriate command to turn on the display
+  }
+  else if (d == "monoff")
+  {
+    // Turn off the display
+    digitalWrite(TFT_BL, LOW);
+    //  tft.writecommand(0x10);  // Send the appropriate command to turn off the display
+  }
+  else if (d == "ledtest") {
+
+    ledctrl(0, 1, 1);
+    delay(1000);
+    ledctrl(1, 0, 1);
+    delay(1000);
+    ledctrl(1, 1, 0);
+    delay(1000);
+    ledctrl(1, 1, 1);
+  }
+  else if (d == "update") {
+
+    WebSerial.print("Current firmware version: ");
+    WebSerial.println(currentVersion);
+    
+    updateFirmware();
+
   }
 }
 
-
+void printTFT(int x, int y, String text, const GFXfont *font, uint16_t color, int size, int format)
+{
+  tft.setFreeFont(font);
+  tft.setTextColor(color);
+  tft.setTextSize(size);
+  tft.setCursor(x, y);
+  if (format != 1)
+  {
+    tft.print(text);
+  }
+  else
+  {
+    tft.println(text);
+  }
+}
 
 void connectToServer()
 {
@@ -89,9 +177,10 @@ void connectToServer()
     Serial.println("Connection failed");
     return;
   }
-#ifdef DEBUG
-  Serial.println("Connected to server");
-#endif
+  if (DEBUG_SERIAL != 0)
+  {
+    Serial.println("Connected to server");
+  }
 }
 
 void sendData()
@@ -128,7 +217,6 @@ void sendData()
       tft.setTextSize(1);
       tft.setTextColor(TFT_WHITE);
 
-
       while (startIndex < response.length())
       {
         endIndex = response.indexOf(delimiter, startIndex); // Find the next delimiter
@@ -142,12 +230,13 @@ void sendData()
         }
 
         String substring = response.substring(startIndex, endIndex);
-#ifdef DEBUG
-        Serial.print("Substring: ");
-        Serial.println(substring);
-        Serial.print("StartIndex: ");
-        Serial.println(startIndex);
-#endif
+        if (DEBUG_SERIAL != 0)
+        {
+          Serial.print("Substring: ");
+          Serial.println(substring);
+          Serial.print("StartIndex: ");
+          Serial.println(startIndex);
+        }
 
         if (startIndex == 0)
         { // PARSE AND SHOW ON TFT PAIR TEXT
@@ -177,49 +266,56 @@ void sendData()
           }
           delay(5);
         } // PARSE AND SHOW ON TFT LOTE TEXT
-        else if (startIndex == valIndex) 
+        else if (startIndex == valIndex)
         {
-          printTFT(TFT_WIDTH / 1.5, y, substring,FF18, TFT_WHITE, 1, 0);
+          printTFT(TFT_WIDTH / 1.5, y, substring, FF18, TFT_WHITE, 1, 0);
           delay(5);
         }
-        else if (startIndex == valIndex1) 
+        else if (startIndex == valIndex1)
         { // PARSE AND SHOW ON TFT VALUE OF OPEN OPERATIONS TEXT
 
           int col = substring.toInt();
           if (col <= 0.0)
           {
-            printTFT(TFT_WIDTH / 1.1, y, substring,FF18, TFT_RED, 1, 0);
+            printTFT(TFT_WIDTH / 1.1, y, substring, FF18, TFT_RED, 1, 0);
             delay(5);
           }
           else
           {
-            printTFT(TFT_WIDTH / 1.044, y, substring,FF18, TFT_GREEN, 1, 0);
+            printTFT(TFT_WIDTH / 1.044, y, substring, FF18, TFT_GREEN, 1, 0);
             delay(5);
           }
-
         }
         else if (startIndex == 23)
         {
-        // PARSE PROFIT VALUE TEXT
-        #ifdef DEBUG
-                  Serial.print("Profit: ");
-        #endif
+          // PARSE PROFIT VALUE TEXT
+          if (DEBUG_SERIAL != 0)
+          {
+            Serial.print("Profit: ");
+            WebSerial.print("Profit: ");
+          }
 
-                  profit = substring.substring(0, 6);
-        #ifdef DEBUG
-                  Serial.println(profit);
-        #endif
+          profit = substring.substring(0, 6);
+          if (DEBUG_SERIAL != 0)
+          {
+            Serial.println(profit);
+            WebSerial.println(profit);
+          }
         }
-        #ifdef DEBUG
-                Serial.println(substring); // Print the extracted substring
-        #endif
+        if (DEBUG_SERIAL != 0)
+        {
+          Serial.println(substring); // Print the extracted substring
+          WebSerial.println(substring);
+        }
 
         startIndex = endIndex + 1; // Update the starting index for the next substring
       }
-        #ifdef DEBUG
-              Serial.println("---------------------------------------");
-        #endif
-     }
+      if (DEBUG_SERIAL != 0)
+      {
+        Serial.println("---------------------------------------");
+        WebSerial.println("---------------------------------------");
+      }
+    }
     if (endmsg == true)
     { // DRAW YELLOW LINE AND SHOW ON TFT PAIR TEXT
       tft.drawLine(0, y + 5, TFT_HEIGHT, y + 5, TFT_YELLOW);
@@ -237,16 +333,9 @@ void sendData()
       endmsg = false;
 
       tft.fillRect(0, y + 25, TFT_HEIGHT, TFT_WIDTH - (TFT_WIDTH - y), TFT_BLACK);
-      
-      #ifdef DEBUG
-      Serial.print("TFT REST:");
-      Serial.println(y);
-      Serial.println(TFT_WIDTH - y);
-      #endif
     }
     client.stop(); // Close connection
 
-    
     y = -8;
   }
 }
@@ -258,6 +347,13 @@ void setup()
 
   pinMode(TRIGGER_PIN, INPUT_PULLUP);
   pinMode(CHANGE_SRV_PIN, INPUT_PULLUP);
+  pinMode(17, OUTPUT);
+  pinMode(4, OUTPUT);
+  pinMode(16, OUTPUT);
+  digitalWrite(17, HIGH);
+  digitalWrite(4, HIGH);
+  digitalWrite(16, HIGH);
+
   // clean FS, for testing
   // SPIFFS.format();
   tft.begin();
@@ -270,12 +366,11 @@ void setup()
   tft.setCursor(0, 20);
   tft.println("Started FX Monitor");
   // read configuration from FS json
-  Serial.println("mounting FS...");
   tft.println("mounting FS...");
 
   if (SPIFFS.begin())
   {
-    Serial.println("mounted file system");
+    // Serial.println("mounted file system");
     if (SPIFFS.exists("/config.json"))
     {
       // file exists, reading and loading
@@ -325,10 +420,13 @@ void setup()
     tft.println("failed to mount FS");
     tft.println("Open FX_AP with pass: Future2050");
   }
+
+#ifdef DEBUG_SERIAL
   Serial.println(fx_server);
   Serial.println(fx_port);
   Serial.println(fx_server2);
   Serial.println(fx_port2);
+#endif
 
   // The extra parameters to be configured (can be either global or just in the setup)
   // After connecting, parameter.getValue() will get you the configured value
@@ -344,7 +442,6 @@ void setup()
 
   // set config save notify callback
   wifiManager.setSaveConfigCallback(saveConfigCallback);
-
 
   // add all your parameters here
   wifiManager.addParameter(&custom_fx_server);
@@ -380,6 +477,7 @@ void setup()
 
   // if you get here you have connected to the WiFi
   Serial.println("connected...yeey :)");
+
   tft.setTextColor(TFT_GREEN);
   tft.println("Connected");
   tft.setTextColor(TFT_WHITE);
@@ -435,61 +533,87 @@ void setup()
   Serial.print("FX port 2: ");
   Serial.println(fx_port2);
 
-  strcpy(fx_server_con , fx_server);
-  strcpy(fx_port_con , fx_port);
+  strcpy(fx_server_con, fx_server);
+  strcpy(fx_port_con, fx_port);
 
   ArduinoOTA.setHostname("FX-ota");
   ArduinoOTA.begin();
-  delay(2000);
-  // tft.fillScreen(TFT_BLACK);
+  delay(500);
+  // WebSerial is accessible at "<IP Address>/webserial" in browser
+  WebSerial.begin(&server);
+  /* Attach Message Callback */
+  WebSerial.msgCallback(recvMsg);
+  server.begin();
+  delay(1000);
+  timeClient.begin();
+  delay(100);
+  set_time();
+  delay(100);
+  // Get the current firmware file size
+  currentFileSize = ESP.getSketchSize();
+  WebSerial.print("Current firmware version: ");
+  WebSerial.println(currentVersion);
+  
+  updateFirmware();
 }
+
+
+
+
+
 
 void loop()
 {
   ArduinoOTA.handle();
 
-  if (digitalRead(CHANGE_SRV_PIN) == LOW && srv == 0) //Change to server 2
-  { 
-  tft.fillScreen(TFT_YELLOW);
-  printTFT(50,50, "Server 1",FF18, TFT_BLACK, 2, 1); //print on TFT Screen
-  strcpy(fx_server_con , fx_server2);
-  strcpy(fx_port_con , fx_port2);
-  Serial.println("Server Changed to Second! ");
-  Serial.println(fx_server_con);
-  Serial.println(fx_port_con);
-  srv = 1;
-  delay(2000);
-  tft.fillScreen(TFT_BLACK);
-  tft.setFreeFont(FF18);
-  tft.setTextSize(1);
-  tft.setTextColor(TFT_WHITE);
-  tft.setCursor(0,50);
-  tft.println("Waiting for data...");
-  } 
-
-  if (digitalRead(CHANGE_SRV_PIN) == LOW && srv == 1) //Change to server 2
+  if (digitalRead(CHANGE_SRV_PIN) == LOW && srv == 0) // Change to server 2
   {
-  tft.fillScreen(TFT_GREEN);
-  printTFT(50,50, "Server 2",FF18, TFT_BLACK, 2, 1);
-  strcpy(fx_server_con , fx_server);
-  strcpy(fx_port_con , fx_port);
-  Serial.println("Server Changed to First! ");
-  Serial.println(fx_server_con);
-  Serial.println(fx_port_con);
-  delay(2000);
-  tft.fillScreen(TFT_BLACK);
-  printTFT(0,50, "Waiting for data...",FF18, TFT_WHITE, 1, 1);
-  srv = 0;
+    tft.fillScreen(TFT_YELLOW);
+    printTFT(TFT_WIDTH / 4, TFT_HEIGHT / 3, "Server 1", FF18, TFT_BLACK, 2, 1); // print on TFT Screen
+
+    strcpy(fx_server_con, fx_server2);
+    strcpy(fx_port_con, fx_port2);
+
+    Serial.println("Server Changed to First! ");
+    WebSerial.println(F("Server Changed to First!"));
+    Serial.println(fx_server_con);
+    Serial.println(fx_port_con);
+
+    srv = 1;
+    delay(2000);
+
+    tft.fillScreen(TFT_BLACK);
+    printTFT(0, 50, "Waiting for data...", FF18, TFT_WHITE, 1, 1);
+  }
+
+  if (digitalRead(CHANGE_SRV_PIN) == LOW && srv == 1) // Change to server 2
+  {
+    tft.fillScreen(TFT_GREEN);
+    printTFT(TFT_WIDTH / 4, TFT_HEIGHT / 3, "Server 2", FF18, TFT_BLACK, 2, 1);
+
+    strcpy(fx_server_con, fx_server);
+    strcpy(fx_port_con, fx_port);
+
+    Serial.println("Server Changed to Second! ");
+    WebSerial.println(F("Server Changed to Second!"));
+    Serial.println(fx_server_con);
+    Serial.println(fx_port_con);
+
+    delay(2000);
+
+    tft.fillScreen(TFT_BLACK);
+    printTFT(0, 50, "Waiting for data...", FF18, TFT_WHITE, 1, 1);
+    srv = 0;
   }
 
   if (digitalRead(TRIGGER_PIN) == LOW)
   {
     tft.fillScreen(TFT_RED);
-    
-    SPIFFS.format(); //Format SPIFFS and all data
-       
+
+    SPIFFS.format(); // Format SPIFFS and all data
+
     AsyncWiFiManager wifiManager(&server, &dns); // Local intialization. Once its business is done, there is no need to keep it around
-    wifiManager.resetSettings(); // reset settings - for testing
+    wifiManager.resetSettings();                 // reset settings - for testing
 
     Serial.println("reset");
     delay(1000);
@@ -504,6 +628,27 @@ void loop()
     // Reset the previous time
     previousMillis = currentMillis;
 
+    int dayweek = CheckDayWeek();
+    
+    if (dayweek != DWflag) {
+
+    
+      if (dayweek == 6 || dayweek == 1)
+      {
+        WebSerial.println("Weekeed");
+        digitalWrite(TFT_BL, LOW);
+        ledctrl(0, 1, 1);
+      }
+      else
+      {
+        WebSerial.println("Work day");
+        digitalWrite(TFT_BL, HIGH);
+        ledctrl(1, 0, 1);
+      }
+
+    DWflag = dayweek;
+    }
+    // Connection to server
     if (!client.connected())
     {
 
@@ -515,7 +660,7 @@ void loop()
       if (connected_server == false)
       {
         // tft.setCursor(0, 60);
-        
+
         tft.print("Connecting Server..");
         // tft.setCursor(205, 60);
         tft.setTextColor(TFT_GREEN);
@@ -526,5 +671,4 @@ void loop()
       sendData();
     }
   }
-
 }
