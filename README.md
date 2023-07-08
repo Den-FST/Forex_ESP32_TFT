@@ -15,5 +15,6 @@ Next implementation tasks:
 
 - [x] AP WiFi Portal.
 - [ ] WebServer View Forex data.
-- [ ] Time Sync and scenaries.
+- [x] Time Sync and scenaries.
 - [ ] Send data to Home Assistant.
+- [x] WebSerial control. Send "help" to view commands. 
