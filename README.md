@@ -7,9 +7,11 @@ https://img.shields.io/github/last-commit/fstadmin/Forex_ESP32_TFT?style=plastic
 ## In my case is 2 config, TFT
 
 ``` C++
-Send serial=1 for view DEBUG
+Send serial=1 in WebSerial for view DEBUG
 
 ```
+
+For access WebSerial go to http://controller_ip/webserial
 
 Next implementation tasks:
 
