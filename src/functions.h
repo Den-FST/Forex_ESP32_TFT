@@ -11,8 +11,11 @@
 #include <HTTPClient.h>
 #include <Update.h>
 
+#include <esp_task_wdt.h>
+
+
 HTTPClient client2;
-#define FWURL "http://www.fst.pt/upload/update_"
+#define FWURL "http://www.fst.pt/upload/firmware_v"
 #define FWversion 1
 
 int currentVersion = FWversion;
@@ -138,22 +141,26 @@ int CheckDayWeek() {
 bool checkFileSize(int fileSize) {
   // Get the current firmware size
   int currentFileSize = ESP.getSketchSize();
-  
+  Serial.println(currentFileSize);
   // Compare file sizes
   if (fileSize > currentFileSize) {
     WebSerial.println("New firmware available");
+    Serial.println("New firmware available");
     return true;
   } else {
     WebSerial.println("Firmware is up to date");
+    Serial.println("Firmware is up to date");
     return false;
   }
 }
 
 void updateFirmware() {
+  esp_task_wdt_init(30, false);
+
   // Connect to the web server
   String fwVersionURL = FWURL + String(currentVersion + 1) + ".bin";
-  WebSerial.print("Checking for firmware at URL: ");
-  WebSerial.println(fwVersionURL);
+  Serial.print("Checking for firmware at URL: ");
+  Serial.println(fwVersionURL);
 
   client2.begin(fwVersionURL);
   int httpCode = client2.GET();
@@ -161,13 +168,15 @@ void updateFirmware() {
   // Check if the server returned a valid response
   if (httpCode == HTTP_CODE_OK) {
     int contentLength = client2.getSize();
-    
+    Serial.println(contentLength);
     if (checkFileSize(contentLength)) {
+      Serial.print("Updating firmware to version ");
       WebSerial.print("Updating firmware to version ");
-      WebSerial.println(currentVersion + 1);
-
+      Serial.println(currentVersion + 1);
+      delay(500);
       // Start the firmware update process
       if (Update.begin(contentLength, U_FLASH)) {
+        // WebSerial.println("Firmware update started!");
         // Receive and write firmware data to the ESP32 flash memory
         WiFiClient* stream = client2.getStreamPtr();
         uint8_t buff[1024];
@@ -186,20 +195,25 @@ void updateFirmware() {
         // Finish the firmware update
         if (Update.end()) {
           if (Update.isFinished()) {
+            Serial.println("Firmware update successful");
             WebSerial.println("Firmware update successful");
             currentVersion++;
             ESP.restart();
           } else {
+            Serial.println("Firmware update failed");
             WebSerial.println("Firmware update failed");
           }
         } else {
+          Serial.println("Firmware update end failed");
           WebSerial.println("Firmware update end failed");
         }
       } else {
+        Serial.println("Firmware update begin failed");
         WebSerial.println("Firmware update begin failed");
       }
     }
   } else {
+    Serial.println("Firmware download failed");
     WebSerial.println("Firmware download failed");
   }
   

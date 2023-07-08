@@ -25,6 +25,8 @@
 
 #include <ArduinoJson.h> //https://github.com/bblanchon/ArduinoJson
 
+
+
 #define GFXFF 1
 #define FF18 &FreeMono9pt7b
 
@@ -86,13 +88,14 @@ DNSServer dns;
 /* Message callback of WebSerial */
 void recvMsg(uint8_t *data, size_t len)
 {
-  WebSerial.println("Received Data...");
+  // WebSerial.println("Received Data...");
   String d = "";
   for (int i = 0; i < len; i++)
   {
     d += char(data[i]);
   }
   WebSerial.println(d);
+
   if (d == "serial=1")
   {
     DEBUG_SERIAL = 1;
@@ -147,9 +150,31 @@ void recvMsg(uint8_t *data, size_t len)
 
     WebSerial.print("Current firmware version: ");
     WebSerial.println(currentVersion);
-    
     updateFirmware();
+    
 
+  } else if (d == "cmd") {
+
+    WebSerial.print("-- For DEBUG messages On : ");
+        WebSerial.println("serial=1");
+    WebSerial.print("-- For DEBUG messages Off : ");
+        WebSerial.println("serial=0");
+    WebSerial.print("-- Get time from NTP server : ");
+        WebSerial.println("gettime");
+    WebSerial.print("-- Get time from NTP and sync with local time : ");
+        WebSerial.println("settime");
+    WebSerial.print("-- Get system time : ");
+        WebSerial.println("systime");
+    WebSerial.print("-- Show the time from server : ");
+        WebSerial.println("time");
+    WebSerial.print("-- Screen On : ");
+        WebSerial.println("monon");
+    WebSerial.print("-- Screen Off : ");
+        WebSerial.println("monoff");
+    WebSerial.print("-- Test LEDs RGB : ");
+        WebSerial.println("ledtest");
+    WebSerial.print("-- Update firmware from server : ");
+        WebSerial.println("update");
   }
 }
 
@@ -344,6 +369,8 @@ void setup()
 {
   Serial.begin(115200);
   Serial.println();
+
+
 
   pinMode(TRIGGER_PIN, INPUT_PULLUP);
   pinMode(CHANGE_SRV_PIN, INPUT_PULLUP);
@@ -550,11 +577,11 @@ void setup()
   set_time();
   delay(100);
   // Get the current firmware file size
-  currentFileSize = ESP.getSketchSize();
-  WebSerial.print("Current firmware version: ");
-  WebSerial.println(currentVersion);
+  // currentFileSize = ESP.getSketchSize();
+  // WebSerial.print("Current firmware version: ");
+  // WebSerial.println(currentVersion);
   
-  updateFirmware();
+  // updateFirmware();
 }
 
 
