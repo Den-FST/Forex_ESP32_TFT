@@ -17,4 +17,4 @@ Next implementation tasks:
 - [ ] WebServer View Forex data.
 - [x] Time Sync and scenaries.
 - [ ] Send data to Home Assistant.
-- [x] WebSerial control. Send "help" to view commands. 
+- [x] WebSerial control. Send "cmd" to view commands. 
