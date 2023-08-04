@@ -1,3 +1,9 @@
+//+------------------------------------------------------------------+
+//|                                          Forex data ESP32 TFT    |
+//|                                                     2023, FST    |
+//|                                                      Denis Sk    |
+//+------------------------------------------------------------------+
+
 #include <Arduino.h>
 
 #include <FS.h> //this needs to be first, or it all crashes and burns...
@@ -25,7 +31,18 @@
 
 #include <ArduinoJson.h> //https://github.com/bblanchon/ArduinoJson
 
+#include <TFT_Touch.h>
 
+// These are the pins used to interface between the 2046 touch controller and Arduino Pro
+#define DOUT 39 /* Data out pin (T_DO) of touch screen */
+#define DIN 32  /* Data in pin (T_DIN) of touch screen */
+#define DCS 33  /* Chip select pin (T_CS) of touch screen */
+#define DCLK 25 /* Clock pin (T_CLK) of touch screen */
+
+/* Create an instance of the touch screen library */
+TFT_Touch touch = TFT_Touch(DCS, DCLK, DIN, DOUT);
+
+#define devboard
 
 #define GFXFF 1
 #define FF18 &FreeMono9pt7b
@@ -36,14 +53,14 @@ TFT_eSPI tft = TFT_eSPI(); // Initialize TFT display object
 int DEBUG_SERIAL = 0;
 
 // Variables to store the current firmware file size
-
-
-int DWflag = 9;
+int count = 0;
+// int DWflag = 9;
 int y = 0;
 bool sent = false;
 bool connected_server = false;
 bool endmsg = false;
-
+int lastInx = 0;
+int nextInx = 0;
 unsigned long previousMillis = 0;     // Stores the previous time
 const unsigned long delayTime = 5000; // Delay time in milliseconds
 
@@ -53,8 +70,12 @@ String serialData;
 
 WiFiClient client;
 
-String myString = "";
+String lastSubstring;
 String profit;
+String todayProfit;
+String debug;
+String srv_HrsMins;
+String srv_dayOfWeek;
 
 char fx_server[40];
 char fx_port[6] = "5000";
@@ -65,10 +86,14 @@ char fx_port2[6] = "5001";
 char fx_server_con[40];
 char fx_port_con[6];
 
+#ifdef devboard
 #define TRIGGER_PIN 22
 #define CHANGE_SRV_PIN 0
-
-int srv = 0;
+#else
+#define TRIGGER_PIN 32
+#define CHANGE_SRV_PIN 22
+#endif
+int srv = 1;
 
 // flag for saving data
 bool shouldSaveConfig = false;
@@ -82,8 +107,6 @@ void saveConfigCallback()
 
 AsyncWebServer server(80);
 DNSServer dns;
-
-
 
 /* Message callback of WebSerial */
 void recvMsg(uint8_t *data, size_t len)
@@ -128,15 +151,14 @@ void recvMsg(uint8_t *data, size_t len)
   {
     // Turn on the display
     digitalWrite(TFT_BL, HIGH);
-    // tft.writecommand(0x11);  // Send the appropriate command to turn on the display
   }
   else if (d == "monoff")
   {
     // Turn off the display
     digitalWrite(TFT_BL, LOW);
-    //  tft.writecommand(0x10);  // Send the appropriate command to turn off the display
   }
-  else if (d == "ledtest") {
+  else if (d == "ledtest")
+  {
 
     ledctrl(0, 1, 1);
     delay(1000);
@@ -146,38 +168,40 @@ void recvMsg(uint8_t *data, size_t len)
     delay(1000);
     ledctrl(1, 1, 1);
   }
-  else if (d == "update") {
+  else if (d == "update")
+  {
 
     WebSerial.print("Current firmware version: ");
     WebSerial.println(currentVersion);
     updateFirmware();
-    
-
-  } else if (d == "cmd") {
+  }
+  else if (d == "cmd")
+  {
 
     WebSerial.print("-- For DEBUG messages On : ");
-        WebSerial.println("serial=1");
+    WebSerial.println("serial=1");
     WebSerial.print("-- For DEBUG messages Off : ");
-        WebSerial.println("serial=0");
+    WebSerial.println("serial=0");
     WebSerial.print("-- Get time from NTP server : ");
-        WebSerial.println("gettime");
+    WebSerial.println("gettime");
     WebSerial.print("-- Get time from NTP and sync with local time : ");
-        WebSerial.println("settime");
+    WebSerial.println("settime");
     WebSerial.print("-- Get system time : ");
-        WebSerial.println("systime");
+    WebSerial.println("systime");
     WebSerial.print("-- Show the time from server : ");
-        WebSerial.println("time");
+    WebSerial.println("time");
     WebSerial.print("-- Screen On : ");
-        WebSerial.println("monon");
+    WebSerial.println("monon");
     WebSerial.print("-- Screen Off : ");
-        WebSerial.println("monoff");
+    WebSerial.println("monoff");
     WebSerial.print("-- Test LEDs RGB : ");
-        WebSerial.println("ledtest");
+    WebSerial.println("ledtest");
     WebSerial.print("-- Update firmware from server : ");
-        WebSerial.println("update");
+    WebSerial.println("update");
   }
 }
 
+// TFT Printing function
 void printTFT(int x, int y, String text, const GFXfont *font, uint16_t color, int size, int format)
 {
   tft.setFreeFont(font);
@@ -194,6 +218,7 @@ void printTFT(int x, int y, String text, const GFXfont *font, uint16_t color, in
   }
 }
 
+// Server connection function.
 void connectToServer()
 {
   int port = atoi(fx_port_con);
@@ -208,6 +233,10 @@ void connectToServer()
   }
 }
 
+//+------------------------------------------------------------------+
+//|                  Socket exchange comunication                    |
+//+------------------------------------------------------------------+
+
 void sendData()
 {
   if (client.connected())
@@ -217,13 +246,10 @@ void sendData()
 
     if (sent == false)
     {
-      // tft.setCursor(0, 80);
       tft.print("Send data FXServer..");
-      // tft.setCursor(205, 80);
       tft.setTextColor(TFT_GREEN);
       tft.println("OK");
       tft.setTextColor(TFT_WHITE);
-      // tft.setCursor(0, 100);
       tft.print("Waiting response..");
       sent = true;
     }
@@ -249,102 +275,144 @@ void sendData()
         if (endIndex == -1)
         {
           endmsg = true;
-          // tft.fillRect(0, 20, 240, 220, TFT_BLACK);
           // If no more delimiter is found, extract the substring until the end of the string
           endIndex = response.length();
         }
 
         String substring = response.substring(startIndex, endIndex);
+
         if (DEBUG_SERIAL != 0)
         {
-          Serial.print("Substring: ");
-          Serial.println(substring);
-          Serial.print("StartIndex: ");
-          Serial.println(startIndex);
+          debug = "StartIndex: " + String(startIndex) + " - Substring: " + substring;
+
+          Serial.println(debug);
+          // WebSerial.println(debug);
+          delay(200);
         }
 
         if (startIndex == 0)
         { // PARSE AND SHOW ON TFT PAIR TEXT
           y += 18;
           tft.fillRect(0, y - 15, TFT_HEIGHT, 50, TFT_BLACK);
-          tft.setTextColor(TFT_WHITE);
-          tft.setCursor(TFT_WIDTH / 16, y);
-          tft.print(substring);
+          printTFT(TFT_WIDTH / 16, y, substring, FF18, TFT_WHITE, 1, 0);
           delay(5);
+
+          count++;
+          nextInx = substring.length() + 1 + startIndex;
+
         } // PARSE AND SHOW ON TFT TYPE OPERATION TEXT
-        else if (startIndex == 7)
+        if (startIndex == nextInx && count == 1)
         {
-          tft.setCursor(TFT_WIDTH / 2.2, y);
           if (substring == "Sell")
           {
-            tft.setTextColor(TFT_BLUE);
-            tft.print("SL");
-            valIndex = 12;
-            valIndex1 = 17;
+            printTFT(TFT_WIDTH / 2.45, y, "SL", FF18, TFT_BLUE, 1, 0);
           }
           else
           {
-            tft.setTextColor(TFT_PURPLE);
-            tft.print("BY");
-            valIndex = 11;
-            valIndex1 = 16;
+            printTFT(TFT_WIDTH / 2.45, y, "BY", FF18, TFT_MAGENTA, 1, 0);
           }
           delay(5);
+          count++;
+          nextInx = substring.length() + 1 + startIndex;
         } // PARSE AND SHOW ON TFT LOTE TEXT
-        else if (startIndex == valIndex)
+
+        if (startIndex == nextInx && count == 2)
         {
-          printTFT(TFT_WIDTH / 1.5, y, substring, FF18, TFT_WHITE, 1, 0);
+          printTFT(TFT_WIDTH / 1.8, y, substring, FF18, TFT_WHITE, 1, 0);
           delay(5);
+          count++;
+
+          nextInx = substring.length() + 1 + startIndex;
         }
-        else if (startIndex == valIndex1)
+
+        if (startIndex == nextInx && count == 3)
         { // PARSE AND SHOW ON TFT VALUE OF OPEN OPERATIONS TEXT
 
           int col = substring.toInt();
-          if (col <= 0.0)
+          if (col < 0.1)
           {
-            printTFT(TFT_WIDTH / 1.1, y, substring, FF18, TFT_RED, 1, 0);
+            printTFT(TFT_WIDTH / 1.3, y, substring, FF18, TFT_RED, 1, 0); // Negative values
             delay(5);
+          }
+          else if (col >= 0.1)
+          {
+            printTFT(TFT_WIDTH / 1.234, y, substring, FF18, TFT_GREEN, 1, 0); // Positive values
+            delay(5);
+          }
+          count++;
+          nextInx = substring.length() + 1 + startIndex;
+        }
+
+        if (startIndex == nextInx && count == 4)
+        {
+          // PARSE PROFIT VALUE TEXT
+          profit = substring.substring(0, 6);
+          count++;
+          nextInx = substring.length() + 1 + startIndex;
+        }
+
+        if (startIndex == nextInx && count == 5)
+        // Today profit of closed positions.
+        {
+          todayProfit = substring;
+          count++;
+          nextInx = substring.length() + 1 + startIndex;
+        }
+
+        if (startIndex == nextInx && count == 6) // Time passed of each opened posision.
+        {
+          printTFT(TFT_WIDTH + 20, y, substring, FF18, TFT_LIGHTGREY, 1, 0);
+          nextInx = substring.length() + 1 + startIndex;
+          count++;
+        }
+
+        if (startIndex == nextInx && count == 7)
+        // Hours:Minutes of the server time.
+        {
+
+          srv_HrsMins = substring;
+          nextInx = substring.length() + 1 + startIndex;
+          count++;
+        }
+
+        if (startIndex == nextInx && count == 8)
+        // Day of week from the server.
+        {
+          srv_dayOfWeek = substring;
+
+          nextInx = substring.length() + 1 + startIndex;
+          count++;
+        }
+
+        if (startIndex == nextInx && count == 9)
+        // Day of week from the server.
+        {
+
+          if (substring.toInt() == 1)
+          {
+            tft.drawTriangle(2, y - 2, 8, y - 2, 5, y - 7, TFT_GREEN);
           }
           else
           {
-            printTFT(TFT_WIDTH / 1.044, y, substring, FF18, TFT_GREEN, 1, 0);
-            delay(5);
+            tft.drawTriangle(2, y - 7, 8, y - 7, 5, y - 2, TFT_RED);
           }
+          count = 0;
         }
-        else if (startIndex == 23)
-        {
-          // PARSE PROFIT VALUE TEXT
-          if (DEBUG_SERIAL != 0)
-          {
-            Serial.print("Profit: ");
-            WebSerial.print("Profit: ");
-          }
-
-          profit = substring.substring(0, 6);
-          if (DEBUG_SERIAL != 0)
-          {
-            Serial.println(profit);
-            WebSerial.println(profit);
-          }
-        }
-        if (DEBUG_SERIAL != 0)
-        {
-          Serial.println(substring); // Print the extracted substring
-          WebSerial.println(substring);
-        }
-
-        startIndex = endIndex + 1; // Update the starting index for the next substring
+        startIndex = endIndex + 1; // Update the starting index for the next substring.
       }
       if (DEBUG_SERIAL != 0)
       {
         Serial.println("---------------------------------------");
-        WebSerial.println("---------------------------------------");
       }
     }
     if (endmsg == true)
-    { // DRAW YELLOW LINE AND SHOW ON TFT PAIR TEXT
-      tft.drawLine(0, y + 5, TFT_HEIGHT, y + 5, TFT_YELLOW);
-      tft.setCursor(TFT_WIDTH / 2.5, y + 20);
+    {
+      tft.drawLine(0, y + 5, TFT_HEIGHT, y + 5, TFT_YELLOW); // DRAW YELLOW LINE AND SHOW ON TFT PAIR TEXT
+      tft.fillRect(0, y + 25, TFT_HEIGHT, TFT_WIDTH - (TFT_WIDTH - y), TFT_BLACK);
+      printTFT(20, y + 20, srv_HrsMins, FF18, TFT_GREEN, 1, 1);
+      printTFT(TFT_WIDTH / 1.8, y + 20, todayProfit, FF18, TFT_CYAN, 1, 1);
+
+      tft.setCursor(TFT_WIDTH / 1.3, y + 20);
       int col = profit.toInt();
       if (col < 0)
         tft.setTextColor(TFT_GOLD);
@@ -352,12 +420,25 @@ void sendData()
       {
         tft.setTextColor(TFT_GREEN);
       }
-      tft.print("Eur: ");
-      delay(5);
-      tft.print(profit);
-      endmsg = false;
 
-      tft.fillRect(0, y + 25, TFT_HEIGHT, TFT_WIDTH - (TFT_WIDTH - y), TFT_BLACK);
+      tft.setCursor(TFT_WIDTH / 1.3, y + 20);
+      tft.print(profit);
+
+      int srv_h = srv_HrsMins.substring(0, 2).toInt();
+      int srv_d = srv_dayOfWeek.toInt();
+
+      if (srv_h > 6 && srv_h < 23 && srv_d != 6 && srv_d != 0) // If time is betwen 6 a.m. and 11 p.m. and not weekend day, switch monitor on
+      {
+        digitalWrite(TFT_BL, HIGH);
+        ledctrl(1, 0, 1);
+      }
+
+      else // Monitor off
+      {
+        digitalWrite(TFT_BL, LOW);
+        ledctrl(0, 1, 1);
+      }
+      endmsg = false;
     }
     client.stop(); // Close connection
 
@@ -365,12 +446,14 @@ void sendData()
   }
 }
 
+//+------------------------------------------------------------------+
+//|                            SETUP ZONE                            |
+//+------------------------------------------------------------------+
+
 void setup()
 {
   Serial.begin(115200);
   Serial.println();
-
-
 
   pinMode(TRIGGER_PIN, INPUT_PULLUP);
   pinMode(CHANGE_SRV_PIN, INPUT_PULLUP);
@@ -381,12 +464,9 @@ void setup()
   digitalWrite(4, HIGH);
   digitalWrite(16, HIGH);
 
-  // clean FS, for testing
-  // SPIFFS.format();
   tft.begin();
-  // delay(50);
+
   tft.setRotation(1); // Set display rotation (adjust to match your TFT display)
-  // tft.setFreeFont(FF18);
   tft.fillScreen(TFT_BLACK);
   tft.setTextSize(1);
   tft.setTextColor(TFT_WHITE);
@@ -446,14 +526,9 @@ void setup()
     Serial.println("failed to mount FS");
     tft.println("failed to mount FS");
     tft.println("Open FX_AP with pass: Future2050");
+    SPIFFS.format();
   }
 
-#ifdef DEBUG_SERIAL
-  Serial.println(fx_server);
-  Serial.println(fx_port);
-  Serial.println(fx_server2);
-  Serial.println(fx_port2);
-#endif
 
   // The extra parameters to be configured (can be either global or just in the setup)
   // After connecting, parameter.getValue() will get you the configured value
@@ -479,18 +554,6 @@ void setup()
 
   // reset settings - for testing
   //  wifiManager.resetSettings();
-
-  // sets timeout until configuration portal gets turned off
-  // useful to make it all retry or go to sleep
-  // in seconds
-  //  wifiManager.setTimeout(120);
-
-  // tft.println("Open FX_AP with pass: Future2050");
-  // tft.println(wifiManager.getConfigPortalSSID());
-
-  // fetches ssid and pass and tries to connect
-  // if it does not connect it starts an access point with the specified name
-  // here  "AutoConnectAP"
 
   // and goes into a blocking loop awaiting configuration
   if (!wifiManager.autoConnect("FX_AP", "Future2050"))
@@ -576,34 +639,68 @@ void setup()
   delay(100);
   set_time();
   delay(100);
-  // Get the current firmware file size
-  // currentFileSize = ESP.getSketchSize();
-  // WebSerial.print("Current firmware version: ");
-  // WebSerial.println(currentVersion);
-  
-  // updateFirmware();
+  touch.setCal(526, 3443, 750, 3377, 320, 240, 1);
 }
 
-
-
-
-
+//+------------------------------------------------------------------+
+//|                             LOOP ZONE                            |
+//+------------------------------------------------------------------+
 
 void loop()
 {
-  ArduinoOTA.handle();
+  ArduinoOTA.handle(); // Upload over air. Ota handle.
 
-  if (digitalRead(CHANGE_SRV_PIN) == LOW && srv == 0) // Change to server 2
+  uint16_t touchX, touchY;
+
+  bool touched = touch.Pressed(); // tft.getTouch( &touchX, &touchY, 600 );
+  int srvTouch = 0;
+
+  if (touched)
   {
-    tft.fillScreen(TFT_YELLOW);
-    printTFT(TFT_WIDTH / 4, TFT_HEIGHT / 3, "Server 1", FF18, TFT_BLACK, 2, 1); // print on TFT Screen
+    touchX = touch.X();
+    touchY = touch.Y();
 
-    strcpy(fx_server_con, fx_server2);
-    strcpy(fx_port_con, fx_port2);
+    Serial.print("Data x ");
+    Serial.println(touchX);
 
-    Serial.println("Server Changed to First! ");
+    Serial.print("Data y ");
+    Serial.println(touchY);
+
+    // ---=== MENU TEST ===---
+    // tft.drawRect(touchX, touchY, 60, 40, TFT_RED);
+    // tft.fillRect(touchX, touchY, 58, 38, TFT_LIGHTGREY);
+    // tft.setTextColor(TFT_BLACK);
+    // String item1 = "Menu 1";
+    // tft.drawString(item1 , touchX, touchY, 1);
+    // Serial.print("TEXT RECT");
+    // Serial.print(tft.textWidth(item1));
+    // Serial.print(" - ");
+    // Serial.println(tft.fontHeight(1));
+
+  }
+
+  if ((touched || digitalRead(CHANGE_SRV_PIN) == LOW) && srv == 0) // Change to server 2
+  {
+    // tft.fillScreen(TFT_YELLOW);
+    // printTFT(TFT_WIDTH / 4, TFT_HEIGHT / 3, "Server 1", FF18, TFT_BLACK, 2, 1); // print on TFT Screen
+
+    strcpy(fx_server_con, fx_server);
+    strcpy(fx_port_con, fx_port);
+
+    tft.fillScreen(TFT_BLACK);
+
+    String combinedString = String(fx_server_con) + ":" + String(fx_port_con);
+
+    tft.setTextFont(1);
+    tft.drawCentreString("FIRST - 1", TFT_WIDTH / 3, TFT_HEIGHT / 6, 2);
+    tft.drawRoundRect(TFT_WIDTH / 15, TFT_HEIGHT / 4, tft.textWidth(combinedString) + 125, 40, 5, TFT_RED);
+    // tft.fillRoundRect(TFT_WIDTH / 6, TFT_HEIGHT / 4, tft.textWidth(combinedString)+120 , 40, 3, TFT_LIGHTGREY);
+
+    printTFT(TFT_WIDTH / 14, TFT_HEIGHT / 3, combinedString, FF18, TFT_LIGHTGREY, 1, 1);
+
+    Serial.print("Server Changed to First! ");
     WebSerial.println(F("Server Changed to First!"));
-    Serial.println(fx_server_con);
+    Serial.print(fx_server_con);
     Serial.println(fx_port_con);
 
     srv = 1;
@@ -613,17 +710,26 @@ void loop()
     printTFT(0, 50, "Waiting for data...", FF18, TFT_WHITE, 1, 1);
   }
 
-  if (digitalRead(CHANGE_SRV_PIN) == LOW && srv == 1) // Change to server 2
+  if ((touched || digitalRead(CHANGE_SRV_PIN) == LOW) && srv == 1) // Change to server 2
   {
-    tft.fillScreen(TFT_GREEN);
-    printTFT(TFT_WIDTH / 4, TFT_HEIGHT / 3, "Server 2", FF18, TFT_BLACK, 2, 1);
 
-    strcpy(fx_server_con, fx_server);
-    strcpy(fx_port_con, fx_port);
+    strcpy(fx_server_con, fx_server2);
+    strcpy(fx_port_con, fx_port2);
 
-    Serial.println("Server Changed to Second! ");
+    tft.fillScreen(TFT_BLACK);
+
+    String combinedString = String(fx_server_con) + ":" + String(fx_port_con);
+
+    tft.setTextFont(1);
+    tft.drawCentreString("SECOND - 2", TFT_WIDTH / 3, TFT_HEIGHT / 6, 2);
+    tft.drawRoundRect(TFT_WIDTH / 15, TFT_HEIGHT / 4, tft.textWidth(combinedString) + 125, 40, 5, TFT_RED);
+    // tft.fillRoundRect(TFT_WIDTH / 6, TFT_HEIGHT / 4, tft.textWidth(combinedString)+118 , 38, 3, TFT_LIGHTGREY);
+
+    printTFT(TFT_WIDTH / 14, TFT_HEIGHT / 3, combinedString, FF18, TFT_LIGHTGREY, 1, 1);
+
+    Serial.print("Server Changed to Second! ");
     WebSerial.println(F("Server Changed to Second!"));
-    Serial.println(fx_server_con);
+    Serial.print(fx_server_con);
     Serial.println(fx_port_con);
 
     delay(2000);
@@ -633,11 +739,11 @@ void loop()
     srv = 0;
   }
 
-  if (digitalRead(TRIGGER_PIN) == LOW)
+  if (digitalRead(TRIGGER_PIN) == LOW) // Hold reset trigger button for reset all.
   {
     tft.fillScreen(TFT_RED);
 
-    SPIFFS.format(); // Format SPIFFS and all data
+    // SPIFFS.format(); // Format SPIFFS and all data
 
     AsyncWiFiManager wifiManager(&server, &dns); // Local intialization. Once its business is done, there is no need to keep it around
     wifiManager.resetSettings();                 // reset settings - for testing
@@ -654,31 +760,9 @@ void loop()
   {
     // Reset the previous time
     previousMillis = currentMillis;
-
-    int dayweek = CheckDayWeek();
-    
-    if (dayweek != DWflag) {
-
-    
-      if (dayweek == 6 || dayweek == 1)
-      {
-        WebSerial.println("Weekeed");
-        digitalWrite(TFT_BL, LOW);
-        ledctrl(0, 1, 1);
-      }
-      else
-      {
-        WebSerial.println("Work day");
-        digitalWrite(TFT_BL, HIGH);
-        ledctrl(1, 0, 1);
-      }
-
-    DWflag = dayweek;
-    }
-    // Connection to server
+   // Connection to server
     if (!client.connected())
     {
-
       connectToServer();
     }
 
@@ -686,10 +770,7 @@ void loop()
     {
       if (connected_server == false)
       {
-        // tft.setCursor(0, 60);
-
         tft.print("Connecting Server..");
-        // tft.setCursor(205, 60);
         tft.setTextColor(TFT_GREEN);
         tft.println("OK");
         tft.setTextColor(TFT_WHITE);
