@@ -58,6 +58,45 @@ void set_time() {
     WebSerial.println("TimeSet Ok");
 }
 
+String sendTime() {
+  String timeString = "";
+  // Get the current datetime
+  time_t t = time(nullptr);
+
+    // Convert to local time
+  TimeChangeRule* tcr;
+  time_t localTime = myTZ.toLocal(t, &tcr);
+
+  struct tm *timeinfo;
+  timeinfo = localtime(&localTime);
+
+  int currentHour = timeinfo->tm_hour;
+  int currentMinute = timeinfo->tm_min;
+  // int currentSecond = timeinfo->tm_sec;
+
+  // Format the time string
+  if (currentHour < 10) {
+    timeString += "0";
+  }
+  timeString += String(currentHour);
+  
+  timeString += ":";
+  
+  if (currentMinute < 10) {
+    timeString += "0";
+  }
+  timeString += String(currentMinute);
+  
+  // timeString += ":";
+  
+  // if (currentSecond < 10) {
+  //   timeString += "0";
+  // }
+  // timeString += String(currentSecond);
+  
+  return timeString;
+}
+
 void printDateTime() {
   // Get the current datetime
   time_t t = time(nullptr);
@@ -81,33 +120,33 @@ void printDateTime() {
   WebSerial.print(":");
   WebSerial.print(timeinfo->tm_min);
   WebSerial.print(":");
-  WebSerial.println(timeinfo->tm_sec);
+  WebSerial.print(timeinfo->tm_sec);
 
     int dayOfWeek = timeinfo->tm_wday;
   switch (dayOfWeek) {
     case 0:
-      WebSerial.println("Day of the week: Sunday");
+      WebSerial.println(" - Sunday");
       break;
     case 1:
-      WebSerial.println("Day of the week: Monday");
+      WebSerial.println(" - Monday");
       break;
     case 2:
-      WebSerial.println("Day of the week: Tuesday");
+      WebSerial.println(" - Tuesday");
       break;
     case 3:
-      WebSerial.println("Day of the week: Wednesday");
+      WebSerial.println(" - Wednesday");
       break;
     case 4:
-      WebSerial.println("Day of the week: Thursday");
+      WebSerial.println(" - Thursday");
       break;
     case 5:
-      WebSerial.println("Day of the week: Friday");
+      WebSerial.println(" - Friday");
       break;
     case 6:
-      WebSerial.println("Day of the week: Saturday");
+      WebSerial.println(" - Saturday");
       break;
     default:
-      WebSerial.println("Unknown day of the week");
+      WebSerial.println(" - Unknown day of the week");
       break;
   }
 
@@ -222,3 +261,14 @@ void updateFirmware() {
 
 #endif
 
+// Function to extract a substring between two characters
+String getSubstringBetweenChars(String input, char startChar, char endChar) {
+  int startIndex = input.indexOf(startChar);
+  int endIndex = input.indexOf(endChar, startIndex + 1);
+
+  if (startIndex >= 0 && endIndex > startIndex) {
+    return input.substring(startIndex + 1, endIndex);
+  }
+
+  return ""; // Return an empty string if the start and end characters are not found.
+}
