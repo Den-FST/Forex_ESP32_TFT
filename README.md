@@ -7,9 +7,11 @@ https://img.shields.io/github/last-commit/fstadmin/Forex_ESP32_TFT?style=plastic
 ## In my case is 2 config, TFT
 
 ``` C++
-#define DEBUG //to view serial messages
+Send serial=1 in WebSerial for view DEBUG
 
 ```
+
+For access WebSerial go to http://controller_ip/webserial
 
 Next implementation tasks:
 
@@ -17,4 +19,4 @@ Next implementation tasks:
 - [ ] WebServer View Forex data.
 - [x] Time Sync and scenaries.
 - [ ] Send data to Home Assistant.
-- [x] WebSerial control. Send "help" to view commands. 
+- [x] WebSerial control. Send "cmd" to view commands. 
