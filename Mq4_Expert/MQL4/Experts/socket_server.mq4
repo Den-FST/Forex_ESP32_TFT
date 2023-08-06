@@ -1,6 +1,8 @@
-// ###################################################################
-// Based on the awesome example from: https://www.mql5.com/en/blogs/post/706665
-// ###################################################################
+//+------------------------------------------------------------------+
+//|                                             Expert Socket ESP32  |
+//|                                              Copyright 2023, FST |
+//|                                       http://www.fst.pt          |
+//+------------------------------------------------------------------+
 
 #property strict
 
@@ -130,27 +132,86 @@ void OnTimer()
           }
           if (strCommand == "b"){
             //pClient.Send(Symbol() + "," + DoubleToString(SymbolInfoDouble(Symbol(), SYMBOL_BID), 6) + "," + DoubleToString(SymbolInfoDouble(Symbol(), SYMBOL_ASK), 6) + "\r");
-            Print("send client");
+             Print("send client");
+            
+             double todayTradesResult;
+            
+                // Get the current server time
+             datetime serverTime = TimeCurrent();
+         
+             // Get the day of the week (0 - Sunday, 1 - Monday, ..., 6 - Saturday)
+             int dayOfWeek = TimeDayOfWeek(serverTime);
+         
+             int hours = TimeHour(serverTime);
+             int minutes = TimeMinute(serverTime);
+             
+             string hrs = IntegerToString(hours);
+             string mnts = IntegerToString(minutes);
+             
+             if (minutes < 10) {
+             mnts = "0" + mnts;
+             }
+             
+             if (hours <10) {
+             hrs = "0" + hrs;
+             }
+             
+             string hrs_mins = hrs + ":" + mnts;
+            
             
             for (int i = 0; i < OrdersTotal(); i++)
                 {
                if (OrderSelect(i, SELECT_BY_POS, MODE_TRADES))
                {
+               
+               
+                
+ 
+                
+                  // Get the current server time
+                  datetime currentTime = TimeCurrent();
+                         
+               
+                  // Get the order's open time
+                  datetime orderOpenTime = OrderOpenTime();
+            
+            
+                  // Calculate the time difference in seconds
+                  int timeDifferenceSeconds = (int)(currentTime - orderOpenTime);
+            
+                  // Convert the time difference to a human-readable format
+                  string timeDifferenceString = TimeDifferenceToString(timeDifferenceSeconds);
+                  Print("Time: ", timeDifferenceString);
+                   
+                   
+                   
                   // Retrieve the position information
                   int ticket = OrderTicket();
                   string symbol = OrderSymbol();
+                  
+                  
+                  double currentTrend = GetTrend(symbol); // Get the trend for the symbol
+
+                   // You can use the currentTrend value to make decisions or display it in the terminal or on the chart.
+                   Print("Symbol: ", symbol, " | Trend: ", currentTrend);
+                  
+                  string currProfit;
+                  
                   string type = (OrderType() == OP_BUY) ? "Buy" : "Sell";
                   double lots = OrderLots();
                   double openPrice = OrderOpenPrice();
                   float profit = OrderProfit();
-                  double currentProfit = AccountProfit();
-                  Print("Current profit: ", currentProfit);
+                  double currentProfit = AccountProfit(); //-188.5 1 234 5 6
+
+                  todayTradesResult = todayTradesCalc();
+                  todayTradesResult *= 0.9;
+                  //---Print("Current : ", todayTradesResult);
                  // int orderProfitInteger = (int)MathRound(profit);
                   double accbalance = AccountBalance();
-                  double totalProfit = CalculateTotalOpenOrdersProfit();
+                  //--- double totalProfit = CalculateTotalOpenOrdersProfit();
                   // Format the position information as a string
                   //string positionData = ticket + "," + symbol + "," + type + "," + DoubleToString(lots) + "," + DoubleToString(openPrice) + "," + DoubleToString(profit);
-                  string positionData = symbol + "," + type + "," + DoubleToString(lots,2) + "," + DoubleToString(profit,1 ) + "," + DoubleToString(currentProfit, 1) + ",";
+                  string positionData = symbol + "," + type + "," + DoubleToString(lots,2) + "," + DoubleToString(profit,1 ) + "," + DoubleToString(currentProfit, 1) + "," + DoubleToString(todayTradesResult, 1) + "," + timeDifferenceString + "," + hrs_mins + "," + dayOfWeek + "," + DoubleToString(currentTrend, 1) + ",";
                   pClient.Send(positionData  + StringLen(positionData) +  "#");
                   Print(positionData, StringLen(positionData));
                   Print("Account Balance: ", accbalance);
@@ -165,7 +226,7 @@ void OnTimer()
                }
                //pClient.Send("/r");
             
-            
+            Print("Today profit: ", todayTradesCalc(), " Regulated: todayTradesResult: ", todayTradesResult);
             
             
           }
@@ -185,33 +246,105 @@ void OnTimer()
 }
 
 
-double CalculateTotalOpenOrdersProfit()
+
+double GetTrend(string symbol)
 {
-    double totalProfit = 0.0;
-    
-    // Get the total number of open orders
-    int totalOrders = OrdersTotal();
-    
-    // Iterate through each open order
-    for (int i = 0; i < totalOrders; i++)
-    {
-        // Select the order by its index
-        if (OrderSelect(i, SELECT_BY_POS, MODE_TRADES))
-        {
-            // Check if the order is a buy or sell order
-            if (OrderType() == OP_BUY || OrderType() == OP_SELL)
-            {
-                // Calculate the profit of the order
-                double orderProfit = OrderProfit();
-                
-                // Add the profit to the total
-                totalProfit += orderProfit;
-            }
-        }
-    }
-    
-    return totalProfit;
+    int period = 5; // Adjust this value for the desired period of the SMA
+    double ma = iMA(symbol, 0, period, 0, MODE_SMA, PRICE_CLOSE, 0);
+    double prev_ma = iMA(symbol, 0, period, 0, MODE_SMA, PRICE_CLOSE, 1);
+
+    if (ma > prev_ma)
+        return 1; // Uptrend
+    else if (ma < prev_ma)
+        return -1; // Downtrend
+    else
+        return 0; // No clear trend
 }
+
+
+//+------------------------------------------------------------------+
+//| Calculate profit from orders closed today                        |
+//+------------------------------------------------------------------+
+
+double todayTradesCalc()
+{
+
+
+   double profit = 0;
+   int totalOrders = OrdersHistoryTotal();
+   
+   for(int i = 0; i < totalOrders; i++)
+     {
+      if(OrderSelect(i, SELECT_BY_POS, MODE_HISTORY))
+        {
+         // Check if the order's close date is today
+         if(TimeDay(OrderCloseTime()) == TimeDay(TimeCurrent()) &&
+            TimeMonth(OrderCloseTime()) == TimeMonth(TimeCurrent()) &&
+            TimeYear(OrderCloseTime()) == TimeYear(TimeCurrent()))
+           {
+            profit += (OrderProfit() - OrderSwap() - OrderCommission());
+            
+           // Print("Trades profit today: ", OrderProfit(), "Swap ", OrderSwap(), "Comission: ", OrderCommission() );
+           }
+        }
+     }
+     
+
+    //---    Print("Trades profit today: ", profit);
+        
+    return profit;
+}
+
+
+string CalculateOrderOpenTime()
+{
+    int totalOrders = OrdersHistoryTotal();
+    
+    // Get the current server time
+    datetime currentTime = TimeCurrent();
+             
+    string timeDifferenceString;
+    
+    // Get the order's open time
+    datetime orderOpenTime = OrderOpenTime();
+
+
+    // Calculate the time difference in seconds
+    int timeDifferenceSeconds = (int)(currentTime - orderOpenTime);
+
+    // Convert the time difference to a human-readable format
+    timeDifferenceString = TimeDifferenceToString(timeDifferenceSeconds);
+    // Print("Time: ", timeDifferenceString);
+     
+    
+    
+   
+    return timeDifferenceString; 
+}
+
+string TimeDifferenceToString(int timeDifferenceSeconds)
+{
+    string timeString;
+    int hours = timeDifferenceSeconds / 3600;
+    int days = hours / 24;
+    int minutes = (timeDifferenceSeconds % 3600) / 60;
+
+    //string timeString = IntegerToString(days) + "d " + IntegerToString(hours) + "h " ;
+    
+    if (hours < 24 && hours > 0)
+      {
+      timeString = IntegerToString(hours) + "h ";
+      } 
+      else if(hours == 0)  {
+      timeString = IntegerToString(minutes) + "m ";
+      }
+      else {
+      timeString = IntegerToString(days) + "d ";
+      }
+    return timeString;
+}
+
+
 // Use OnTick() to watch for failure to create the timer in OnInit()
 void OnTick()
 {
