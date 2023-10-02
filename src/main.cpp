@@ -52,6 +52,10 @@ TFT_eSPI tft = TFT_eSPI(); // Initialize TFT display object
 // #define DEBUG_SERIAL
 int DEBUG_SERIAL = 0;
 
+const int buzzerPin = 27;  // Use the actual pin number where you connected the buzzer
+int melody[] = { 262, 294, 330, 349, 392, 440, 494, 523 };
+int noteDuration = 300;
+
 // Variables to store the current firmware file size
 int count = 0;
 // int DWflag = 9;
@@ -107,6 +111,13 @@ void saveConfigCallback()
 
 AsyncWebServer server(80);
 DNSServer dns;
+
+
+void buzz(int note, int Duration) {
+    tone(buzzerPin, note);
+    delay(Duration);
+    noTone(buzzerPin);
+}
 
 /* Message callback of WebSerial */
 void recvMsg(uint8_t *data, size_t len)
@@ -175,6 +186,15 @@ void recvMsg(uint8_t *data, size_t len)
     WebSerial.println(currentVersion);
     updateFirmware();
   }
+  else if (d == "buzz")
+  {
+    WebSerial.print("Buzzer Test: ");
+
+    for (int i = 0; i < 8; i++) {
+      buzz(melody[i], noteDuration);
+      delay(100);  // Short pause between notes
+    }
+  }
   else if (d == "cmd")
   {
 
@@ -200,6 +220,7 @@ void recvMsg(uint8_t *data, size_t len)
     WebSerial.println("update");
   }
 }
+
 
 // TFT Printing function
 void printTFT(int x, int y, String text, const GFXfont *font, uint16_t color, int size, int format)
@@ -347,6 +368,11 @@ void sendData()
         {
           // PARSE PROFIT VALUE TEXT
           profit = substring.substring(0, 6);
+
+          if (profit.toInt() > 5.0)
+          {
+            buzz((profit.toInt()*50), 200);
+          }
           count++;
           nextInx = substring.length() + 1 + startIndex;
         }
@@ -425,7 +451,17 @@ void sendData()
       tft.print(profit);
 
       int srv_h = srv_HrsMins.substring(0, 2).toInt();
+      int srv_hm = srv_HrsMins.substring(0, 5).toInt();
       int srv_d = srv_dayOfWeek.toInt();
+
+      if (DEBUG_SERIAL) {
+        WebSerial.print("SRV_H: ");
+        WebSerial.println(srv_HrsMins);
+        WebSerial.print("SRV_M: ");
+        WebSerial.println(srv_HrsMins.substring(3, 5).toInt());
+        WebSerial.print("SRV_D: ");
+        WebSerial.println(srv_d);
+      }
 
       if (srv_h > 6 && srv_h < 23 && srv_d != 6 && srv_d != 0) // If time is betwen 6 a.m. and 11 p.m. and not weekend day, switch monitor on
       {
@@ -455,6 +491,7 @@ void setup()
   Serial.begin(115200);
   Serial.println();
 
+  pinMode(buzzerPin, OUTPUT);
   pinMode(TRIGGER_PIN, INPUT_PULLUP);
   pinMode(CHANGE_SRV_PIN, INPUT_PULLUP);
   pinMode(17, OUTPUT);
