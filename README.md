@@ -20,3 +20,5 @@ Next implementation tasks:
 - [x] Time Sync and scenaries.
 - [ ] Send data to Home Assistant.
 - [x] WebSerial control. Send "cmd" to view commands. 
+
+<img src="main.jpg" width="400"/>
