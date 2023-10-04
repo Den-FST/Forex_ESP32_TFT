@@ -52,10 +52,11 @@ TFT_eSPI tft = TFT_eSPI(); // Initialize TFT display object
 // #define DEBUG_SERIAL
 int DEBUG_SERIAL = 0;
 
-const int buzzerPin = 27;  // Use the actual pin number where you connected the buzzer
-int melody[] = { 262, 294, 330, 349, 392, 440, 494, 523 };
+const int buzzerPin = 27; // Use the actual pin number where you connected the buzzer
+int melody[] = {262, 294, 330, 349, 392, 440, 494, 523};
 int noteDuration = 300;
-
+bool buzzMode = false; 
+int lastSub = 0;
 // Variables to store the current firmware file size
 int count = 0;
 // int DWflag = 9;
@@ -112,11 +113,11 @@ void saveConfigCallback()
 AsyncWebServer server(80);
 DNSServer dns;
 
-
-void buzz(int note, int Duration) {
-    tone(buzzerPin, note);
-    delay(Duration);
-    noTone(buzzerPin);
+void buzz(int note, int Duration)
+{
+  tone(buzzerPin, note);
+  delay(Duration);
+  noTone(buzzerPin);
 }
 
 /* Message callback of WebSerial */
@@ -188,12 +189,25 @@ void recvMsg(uint8_t *data, size_t len)
   }
   else if (d == "buzz")
   {
-    WebSerial.print("Buzzer Test: ");
+    WebSerial.println("Buzzer Test: ");
 
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < 8; i++)
+    {
       buzz(melody[i], noteDuration);
-      delay(100);  // Short pause between notes
+      delay(100); // Short pause between notes
     }
+  }
+    else if (d == "buzzoff")
+  {
+    WebSerial.println("Buzzer off ");
+    buzzMode = false;
+
+  }
+      else if (d == "buzzon")
+  {
+    WebSerial.println("Buzzer on ");
+    buzzMode = true;
+
   }
   else if (d == "cmd")
   {
@@ -220,7 +234,6 @@ void recvMsg(uint8_t *data, size_t len)
     WebSerial.println("update");
   }
 }
-
 
 // TFT Printing function
 void printTFT(int x, int y, String text, const GFXfont *font, uint16_t color, int size, int format)
@@ -359,6 +372,16 @@ void sendData()
           {
             printTFT(TFT_WIDTH / 1.234, y, substring, FF18, TFT_GREEN, 1, 0); // Positive values
             delay(5);
+
+            if (buzzMode == true) {  //Buzz melody then pozitive value
+            
+            WebSerial.println((substring.toInt() - lastSub));
+            if (substring.toInt() > 5.0 && (substring.toInt() - lastSub) > 2 )
+            {
+              buzz((substring.toInt() * 50), 200);
+              lastSub = substring.toInt();
+            }
+           }
           }
           count++;
           nextInx = substring.length() + 1 + startIndex;
@@ -369,10 +392,6 @@ void sendData()
           // PARSE PROFIT VALUE TEXT
           profit = substring.substring(0, 6);
 
-          if (profit.toInt() > 5.0)
-          {
-            buzz((profit.toInt()*50), 200);
-          }
           count++;
           nextInx = substring.length() + 1 + startIndex;
         }
@@ -454,7 +473,8 @@ void sendData()
       int srv_hm = srv_HrsMins.substring(0, 5).toInt();
       int srv_d = srv_dayOfWeek.toInt();
 
-      if (DEBUG_SERIAL) {
+      if (DEBUG_SERIAL)
+      {
         WebSerial.print("SRV_H: ");
         WebSerial.println(srv_HrsMins);
         WebSerial.print("SRV_M: ");
@@ -565,7 +585,6 @@ void setup()
     tft.println("Open FX_AP with pass: Future2050");
     SPIFFS.format();
   }
-
 
   // The extra parameters to be configured (can be either global or just in the setup)
   // After connecting, parameter.getValue() will get you the configured value
@@ -713,7 +732,6 @@ void loop()
     // Serial.print(tft.textWidth(item1));
     // Serial.print(" - ");
     // Serial.println(tft.fontHeight(1));
-
   }
 
   if ((touched || digitalRead(CHANGE_SRV_PIN) == LOW) && srv == 0) // Change to server 2
@@ -797,7 +815,7 @@ void loop()
   {
     // Reset the previous time
     previousMillis = currentMillis;
-   // Connection to server
+    // Connection to server
     if (!client.connected())
     {
       connectToServer();
