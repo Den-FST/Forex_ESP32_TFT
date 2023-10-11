@@ -22,4 +22,5 @@ Next implementation tasks:
 - [x] WebSerial control. Send "cmd" to view commands. 
 
 <img src="main.jpg" width="400"/>
-https://img.shields.io/github/Den-FST/Forex_ESP32_TFT?style=plastic
+
+![GitHub last commit]([https://img.shields.io/github/Den-FST/Forex_ESP32_TFT?style=plastic])
