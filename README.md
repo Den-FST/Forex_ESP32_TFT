@@ -2,7 +2,7 @@
 
 Connect to Metatrader 4 Expert by socket, send request and receive for the data to be displayed on the screen TFT every x seconds. 
 
-https://img.shields.io/github/last-commit/fstadmin/Forex_ESP32_TFT?style=plastic
+https://img.shields.io/github/Den-FST/Forex_ESP32_TFT?style=plastic
 
 ## In my case is 2 config, TFT
 
