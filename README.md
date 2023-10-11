@@ -24,4 +24,3 @@ Next implementation tasks:
 <img src="main.jpg" width="400"/>
 
 https://img.shields.io/github/last-commit/Den-FST/Forex_ESP32_TFT/main
-
