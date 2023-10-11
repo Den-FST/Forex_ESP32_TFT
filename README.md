@@ -23,5 +23,5 @@ Next implementation tasks:
 
 <img src="main.jpg" width="400"/>
 
-[[[https://img.shields.io/github/Den-FST/Forex_ESP32_TFT?style=plastic](https://img.shields.io/github/last-commit/Den-FST/Forex_ESP32_TFT/main)]](https://img.shields.io/github/last-commit/Den-FST/Forex_ESP32_TFT/main)https://img.shields.io/github/last-commit/Den-FST/Forex_ESP32_TFT/main
+https://img.shields.io/github/last-commit/Den-FST/Forex_ESP32_TFT/main
 
