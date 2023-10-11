@@ -2,7 +2,7 @@
 
 Connect to Metatrader 4 Expert by socket, send request and receive for the data to be displayed on the screen TFT every x seconds. 
 
-https://img.shields.io/github/Den-FST/Forex_ESP32_TFT?style=plastic
+
 
 ## In my case is 2 config, TFT
 
@@ -22,3 +22,4 @@ Next implementation tasks:
 - [x] WebSerial control. Send "cmd" to view commands. 
 
 <img src="main.jpg" width="400"/>
+<img src="https://img.shields.io/github/Den-FST/Forex_ESP32_TFT?style=plastic" width="40"/>
